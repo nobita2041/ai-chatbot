@@ -7,15 +7,30 @@ export const VALIDATION_LIMITS = {
   MESSAGES_MAX_COUNT: 50, // 最大50メッセージ
 } as const
 
+// メッセージコンテンツの型定義（テキストまたはマルチモーダル）
+const TextContentSchema = z.object({
+  type: z.literal("text"),
+  text: z.string().max(VALIDATION_LIMITS.MESSAGE_CONTENT_MAX_LENGTH),
+})
+
+const ImageUrlContentSchema = z.object({
+  type: z.literal("image_url"),
+  image_url: z.object({
+    url: z.string(), // Base64 data URL
+  }),
+})
+
+const MessageContentSchema = z.union([
+  z.string().min(1, { message: "メッセージは空にできません" }).max(VALIDATION_LIMITS.MESSAGE_CONTENT_MAX_LENGTH, {
+    message: `メッセージは${VALIDATION_LIMITS.MESSAGE_CONTENT_MAX_LENGTH}文字以内にしてください`,
+  }),
+  z.array(z.union([TextContentSchema, ImageUrlContentSchema])).min(1),
+])
+
 // メッセージスキーマ
 const MessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
-  content: z
-    .string()
-    .min(1, { message: "メッセージは空にできません" })
-    .max(VALIDATION_LIMITS.MESSAGE_CONTENT_MAX_LENGTH, {
-      message: `メッセージは${VALIDATION_LIMITS.MESSAGE_CONTENT_MAX_LENGTH}文字以内にしてください`,
-    }),
+  content: MessageContentSchema,
 })
 
 // チャットリクエストスキーマ

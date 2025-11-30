@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { createChatAgent } from "@/lib/mastra"
 import { validateChatRequest } from "@/lib/validation"
+import { openai } from "@/lib/openai"
 
 export const chatRoute = new Hono()
 
@@ -17,22 +18,46 @@ chatRoute.post("/", async (c) => {
 
     const { messages, systemPrompt } = validation.data
 
-    // Create agent with custom system prompt if provided
+    // メッセージに画像が含まれているかチェック
+    const hasImages = messages.some((msg) => Array.isArray(msg.content))
+
+    // 画像が含まれる場合はOpenAI APIを直接使用
+    if (hasImages) {
+      return stream(c, async (stream) => {
+        try {
+          // システムプロンプトをメッセージに追加
+          const apiMessages: Array<{ role: string; content: unknown }> = systemPrompt
+            ? [{ role: "system", content: systemPrompt }, ...messages]
+            : messages
+
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: apiMessages as never,
+            stream: true,
+          })
+
+          for await (const chunk of response) {
+            const content = chunk.choices[0]?.delta?.content
+            if (content) {
+              await stream.write(content)
+            }
+          }
+        } catch {
+          await stream.write("\n[Error occurred during generation]")
+        }
+      })
+    }
+
+    // テキストのみの場合はMastraを使用（既存の実装）
     const agent = createChatAgent(systemPrompt)
 
-    // Format messages for the agent
-    const formattedMessages = messages.map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    }))
-
     // Get the last user message for streaming
-    const lastMessage = formattedMessages[formattedMessages.length - 1]
+    const lastMessage = messages[messages.length - 1]
 
     // Stream the response
     return stream(c, async (stream) => {
       try {
-        const response = await agent.stream(lastMessage.content)
+        const response = await agent.stream(lastMessage.content as string)
 
         for await (const chunk of response.textStream) {
           await stream.write(chunk)
