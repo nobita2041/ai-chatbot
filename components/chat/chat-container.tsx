@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ChatMessage } from "./chat-message"
 import { ChatInput } from "./chat-input"
 import { SystemPromptEditor } from "./system-prompt-editor"
-import type { Message, ChatRequestMessage } from "@/types"
+import type { Message, ChatRequestMessage, ImageContent } from "@/types"
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/constants"
 import { generateId } from "@/lib/utils"
 
@@ -66,7 +66,7 @@ export function ChatContainer() {
     }
   }, [])
 
-  const handleSend = useCallback(async (content: string) => {
+  const handleSend = useCallback(async (content: string, images?: ImageContent[]) => {
     // 既存のリクエストをキャンセル
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -81,7 +81,28 @@ export function ChatContainer() {
       abortController.abort()
     }, REQUEST_TIMEOUT_MS)
 
-    const userMessage: Message = { id: generateId(), role: "user", content }
+    // 画像がある場合はcontentを配列形式に変換
+    let messageContent: Message["content"]
+    if (images && images.length > 0) {
+      messageContent = [
+        ...(content ? [{ type: "text" as const, text: content }] : []),
+        ...images.map((img) => ({
+          type: "image_url" as const,
+          image_url: {
+            url: `data:${img.mimeType};base64,${img.data}`,
+          },
+        })),
+      ]
+    } else {
+      messageContent = content
+    }
+
+    const userMessage: Message = {
+      id: generateId(),
+      role: "user",
+      content: messageContent,
+      images, // UI表示用
+    }
 
     // メッセージ追加（最大数を超えたら古いメッセージを削除）
     setMessages((prev) => {
@@ -94,7 +115,7 @@ export function ChatContainer() {
     setIsLoading(true)
     setStreamingContent("")
 
-    // APIリクエスト用にIDを除外したメッセージを作成
+    // APIリクエスト用にIDとimagesを除外したメッセージを作成
     const requestMessages: ChatRequestMessage[] = [...messages, userMessage].map(
       ({ role, content }) => ({ role, content })
     )
