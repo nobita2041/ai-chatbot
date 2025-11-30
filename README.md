@@ -1,36 +1,149 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Chatbot
 
-## Getting Started
+OpenAI GPT-4oを使用したシンプルなAIチャットボットWebアプリケーション
 
-First, run the development server:
+## 機能
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
+- テキストチャット
+- ストリーミングレスポンス（リアルタイム表示）
+- システムプロンプトのカスタマイズ（UIから変更可能）
+- セッション内会話履歴の保持
+
+## 技術スタック
+
+### フロントエンド
+- Next.js 16 (App Router)
+- React 19
+- Tailwind CSS 4
+- shadcn/ui
+
+### バックエンド
+- Hono
+- Prisma (MongoDB)
+- Mastra (AIエージェント)
+- OpenAI API (GPT-4o)
+
+### インフラ
+- Google Cloud Run
+- MongoDB Atlas
+
+## セットアップ
+
+### 必要条件
+
+- Node.js 22+
+- pnpm
+- MongoDB (ローカル開発) または MongoDB Atlas (本番)
+- OpenAI API キー
+
+### インストール
+
+\`\`\`bash
+# 依存関係のインストール
+pnpm install
+
+# Prismaクライアントの生成
+pnpm prisma generate
+\`\`\`
+
+### 環境変数
+
+\`.env.local\` ファイルを作成:
+
+\`\`\`env
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key
+
+# MongoDB (ローカル開発)
+DATABASE_URL="mongodb://localhost:27017/ai-chatbot?directConnection=true"
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+\`\`\`
+
+### 開発サーバーの起動
+
+\`\`\`bash
+# MongoDBの起動（ローカル開発）
+brew services start mongodb-community
+
+# 開発サーバーの起動
 pnpm dev
-# or
-bun dev
-```
+\`\`\`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 でアクセス可能
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docker
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### ローカルでのDocker実行
 
-## Learn More
+\`\`\`bash
+# docker-composeで起動（MongoDB含む）
+OPENAI_API_KEY=your_key docker compose up -d
 
-To learn more about Next.js, take a look at the following resources:
+# 停止
+docker compose down
+\`\`\`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### イメージのビルド
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+\`\`\`bash
+docker build -t ai-chatbot .
+\`\`\`
 
-## Deploy on Vercel
+## デプロイ (Google Cloud Run)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 前提条件
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- gcloud CLIのインストールと認証
+- Google Cloudプロジェクトの作成
+- MongoDB Atlasのセットアップ
+
+### デプロイ手順
+
+\`\`\`bash
+# Artifact Registryの作成
+gcloud artifacts repositories create ai-chatbot \\
+  --repository-format=docker \\
+  --location=asia-northeast1
+
+# Docker認証の設定
+gcloud auth configure-docker asia-northeast1-docker.pkg.dev
+
+# イメージのビルドとプッシュ
+docker build --platform linux/amd64 \\
+  -t asia-northeast1-docker.pkg.dev/PROJECT_ID/ai-chatbot/app:latest .
+docker push asia-northeast1-docker.pkg.dev/PROJECT_ID/ai-chatbot/app:latest
+
+# Cloud Runへデプロイ
+gcloud run deploy ai-chatbot \\
+  --image asia-northeast1-docker.pkg.dev/PROJECT_ID/ai-chatbot/app:latest \\
+  --region asia-northeast1 \\
+  --platform managed \\
+  --allow-unauthenticated \\
+  --port 8080 \\
+  --set-env-vars "OPENAI_API_KEY=your_key" \\
+  --set-env-vars "DATABASE_URL=mongodb+srv://..." \\
+  --set-env-vars "NEXT_PUBLIC_APP_URL=https://your-service-url.run.app"
+\`\`\`
+
+## プロジェクト構成
+
+\`\`\`
+ai-chatbot/
+├── src/app/              # Next.js App Router
+│   ├── page.tsx          # チャットUI
+│   └── api/              # Hono API
+├── components/
+│   ├── ui/               # shadcn/ui
+│   └── chat/             # チャットコンポーネント
+├── lib/                  # ユーティリティ
+├── server/api/           # APIハンドラ
+├── prisma/               # Prismaスキーマ
+├── Dockerfile
+└── docker-compose.yml
+\`\`\`
+
+## ライセンス
+
+MIT
